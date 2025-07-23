@@ -10,6 +10,10 @@ use itertools::Itertools;
 use rayon::prelude::*;
 use walkdir::WalkDir;
 
+
+const HASH_SEED: u32 = 0xBA647A7A;
+
+
 #[derive(Parser)]
 struct Args {
     #[arg(default_value = ".")]
@@ -267,7 +271,8 @@ fn check_hashes(dupmap: &mut HashMap<&FileInfo, Vec<&FileInfo>>, print: bool) ->
             //calc orig hash
             let orig_file = fs::read(&original.path);
             if let Ok(orig_file) = orig_file {
-                let orig_hash = seahash::hash(&orig_file);
+                //let orig_hash = seahash::hash(&orig_file);
+                let orig_hash = gxhash::gxhash64(&orig_file, HASH_SEED);
 
                 //check all duplicates
                 duplicates.retain(|dup| match check_dup_hash(dup, orig_hash) {
@@ -296,7 +301,8 @@ fn check_hashes(dupmap: &mut HashMap<&FileInfo, Vec<&FileInfo>>, print: bool) ->
 fn check_dup_hash(dup: &FileInfo, orig_hash: u64) -> bool {
     let dup_file = fs::read(&dup.path);
     if let Ok(dup_file) = dup_file {
-        let dup_hash = seahash::hash(&dup_file);
+        //let dup_hash = seahash::hash(&dup_file);
+        let dup_hash = gxhash::gxhash64(&dup_file, HASH_SEED);
 
         return dup_hash == orig_hash;
     }
