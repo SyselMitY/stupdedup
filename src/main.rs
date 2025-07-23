@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use walkdir::WalkDir;
 
 
-const HASH_SEED: u32 = 0xBA647A7A;
+const HASH_SEED: i64 = 0xBA647A7A;
 
 
 #[derive(Parser)]
