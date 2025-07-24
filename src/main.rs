@@ -5,7 +5,7 @@ use std::{
     thread::{self},
 };
 
-use clap::{Parser, ValueEnum};
+use clap::{builder::ArgPredicate, Parser, ValueEnum};
 use itertools::Itertools;
 use rayon::prelude::*;
 use walkdir::WalkDir;
@@ -29,8 +29,16 @@ struct Args {
     #[arg(long)]
     nosize: bool,
 
-    ///do not use the file hash in determining duplicates
+    ///ignored file names (e.g. cover)
     #[arg(long)]
+    ignore: Vec<String>,
+
+    ///only look for duplicates in the same dir
+    #[arg(long)]
+    no_cross_dir: bool,
+
+    ///do not use the file hash in determining duplicates
+    #[arg(long, default_value_if("nosize", ArgPredicate::IsPresent, Some("true")))]
     nohash: bool,
 
     ///print hash mismatches
@@ -69,7 +77,7 @@ fn main() {
 
     let files = read_fileinfos(&args.path);
     println!("File info collected, finding duplicates based on filename and size");
-    let (originals, duplicates) = dedup_name_size(&files, args.reassigns, args.nosize);
+    let (originals, duplicates) = dedup_name_size(&files, args.reassigns, args.nosize, &args.ignore, args.no_cross_dir);
 
     println!("Deduplication step 1 complete");
     println!("Filtering the results...");
@@ -122,15 +130,20 @@ fn main() {
     }
 }
 
-fn dedup_name_size(
-    files: &HashSet<FileInfo>,
+fn dedup_name_size<'a>(
+    files: &'a HashSet<FileInfo>,
     print_reassigns: bool,
     ignore_size: bool,
-) -> (HashMap<String, &FileInfo>, HashSet<&FileInfo>) {
+    ignore: &[String],
+    no_cross_dir: bool,
+) -> (HashMap<String, &'a FileInfo>, HashSet<&'a FileInfo>) {
     let undup_name_map = Arc::new(Mutex::new(HashMap::new()));
     let duplicates = Arc::new(Mutex::new(HashSet::new()));
 
     files.par_iter().for_each(|fileinfo| {
+        if ignore.contains(&fileinfo.name_undup) {
+                return;
+            }
         let mut undup_name_map = undup_name_map.lock().unwrap();
 
         let existing = undup_name_map.get(&fileinfo.name_undup);
@@ -139,6 +152,7 @@ fn dedup_name_size(
                 undup_name_map.insert(fileinfo.name_undup.clone(), fileinfo);
             }
             Some(existing_entry) if !ignore_size && (existing_entry.size != fileinfo.size) => (), //non duplicate
+            Some(existing_entry) if no_cross_dir && existing_entry.path.parent() != fileinfo.path.parent() => (), //ignore crossdir
             Some(existing_entry) => {
                 //prefer the "non postfixed" filename
                 //CLONE performance penalty? maybe use RC instead
