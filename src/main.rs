@@ -10,9 +10,7 @@ use itertools::Itertools;
 use rayon::prelude::*;
 use walkdir::WalkDir;
 
-
 const HASH_SEED: i64 = 0xBA647A7A;
-
 
 #[derive(Parser)]
 struct Args {
@@ -128,8 +126,8 @@ fn dedup_name_size(
 
     files.par_iter().for_each(|fileinfo| {
         if fileinfo.name.contains("Na und-") {
-                dbg!(fileinfo);
-            }
+            dbg!(fileinfo);
+        }
         let mut undup_name_map = undup_name_map.lock().unwrap();
 
         let existing = undup_name_map.get(&fileinfo.name_undup);
@@ -226,6 +224,8 @@ fn get_filter(filter_arg: &Option<Filter>) -> fn(&&FileInfo) -> bool {
 fn get_undestroyed_name(name: &str) -> &str {
     if name.ends_with(" 2") || name.ends_with(" 3") || name.ends_with(" 4") {
         name.split_at(name.len() - 2).0
+    } else if name.ends_with(" (1)") || name.ends_with(" (2)") || name.ends_with(" (3)") {
+        name.split_at(name.len() - 4).0
     } else {
         name
     }
