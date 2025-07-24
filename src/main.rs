@@ -17,26 +17,31 @@ struct Args {
     #[arg(default_value = ".")]
     path: String,
 
-    //Filter option
+    ///Filter option
     #[arg(long = "filter")]
     filter: Option<Filter>,
 
-    //print the duplicates
+    ///print the duplicates
     #[arg(long)]
     print: bool,
 
-    //do not use the file hash in determining duplicates
+    ///ignore size differences
+    #[arg(long)]
+    nosize: bool,
+
+    ///do not use the file hash in determining duplicates
     #[arg(long)]
     nohash: bool,
 
-    //print hash mismatches
+    ///print hash mismatches
     #[arg(long = "print-wrong-hash")]
     print_hash: bool,
 
+    ///delete found duplicates
     #[arg(long)]
     delete: bool,
 
-    //logs reassignments of "original" files
+    ///logs reassignments of "original" files
     #[arg(long)]
     reassigns: bool,
 }
@@ -64,7 +69,7 @@ fn main() {
 
     let files = read_fileinfos(&args.path);
     println!("File info collected, finding duplicates based on filename and size");
-    let (originals, duplicates) = dedup_name_size(&files, args.reassigns);
+    let (originals, duplicates) = dedup_name_size(&files, args.reassigns, args.nosize);
 
     println!("Deduplication step 1 complete");
     println!("Filtering the results...");
@@ -120,14 +125,12 @@ fn main() {
 fn dedup_name_size(
     files: &HashSet<FileInfo>,
     print_reassigns: bool,
+    ignore_size: bool,
 ) -> (HashMap<String, &FileInfo>, HashSet<&FileInfo>) {
     let undup_name_map = Arc::new(Mutex::new(HashMap::new()));
     let duplicates = Arc::new(Mutex::new(HashSet::new()));
 
     files.par_iter().for_each(|fileinfo| {
-        if fileinfo.name.contains("Na und-") {
-            dbg!(fileinfo);
-        }
         let mut undup_name_map = undup_name_map.lock().unwrap();
 
         let existing = undup_name_map.get(&fileinfo.name_undup);
@@ -135,7 +138,7 @@ fn dedup_name_size(
             None => {
                 undup_name_map.insert(fileinfo.name_undup.clone(), fileinfo);
             }
-            Some(existing_entry) if existing_entry.size != fileinfo.size => (), //non duplicate
+            Some(existing_entry) if !ignore_size && (existing_entry.size != fileinfo.size) => (), //non duplicate
             Some(existing_entry) => {
                 //prefer the "non postfixed" filename
                 //CLONE performance penalty? maybe use RC instead
